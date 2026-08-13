@@ -1,28 +1,24 @@
 package school.hei.students.endpoint.rest.controller.health;
 
+import static school.hei.students.endpoint.rest.controller.health.PingController.KO;
+import static school.hei.students.endpoint.rest.controller.health.PingController.OK;
+
 import lombok.AllArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import school.hei.students.PojaGenerated;
 import school.hei.students.repository.DummyRepository;
-import school.hei.students.repository.DummyUuidRepository;
 
 @PojaGenerated
 @RestController
 @AllArgsConstructor
-public class PingController {
+public class HealthDbController {
 
   DummyRepository dummyRepository;
-  DummyUuidRepository dummyUuidRepository;
 
-  public static final ResponseEntity<String> OK = new ResponseEntity<>("OK", HttpStatus.OK);
-  public static final ResponseEntity<String> KO =
-      new ResponseEntity<>("KO", HttpStatus.INTERNAL_SERVER_ERROR);
-
-  @GetMapping("/ping")
-  public String ping() {
-    return "pong";
+  @GetMapping("/health/db")
+  public ResponseEntity<String> dummyTable_should_not_be_empty() {
+    return dummyRepository.findAll().isEmpty() ? KO : OK;
   }
 }
