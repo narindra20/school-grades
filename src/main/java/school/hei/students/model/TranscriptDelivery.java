@@ -6,4 +6,9 @@ import lombok.Builder;
 
 @Builder
 public record TranscriptDelivery(
-    UUID id, UUID studentId, String academicYear, Instant sentAt, String s3Url, String status) {}
+    UUID id,
+    UUID studentId,
+    String academicYear,
+    Instant sentAt,
+    String s3Url,
+    DeliveryStatus status) {}

@@ -6,4 +6,9 @@ import lombok.Builder;
 
 @Builder
 public record Exam(
-    UUID id, UUID assignmentId, String label, Instant examDate, Double coefficient, String type) {}
+    UUID id,
+    UUID assignmentId,
+    String label,
+    Instant examDate,
+    Double coefficient,
+    ExamType type) {}
