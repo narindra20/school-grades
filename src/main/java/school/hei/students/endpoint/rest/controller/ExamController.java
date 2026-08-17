@@ -13,9 +13,9 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import school.hei.students.endpoint.rest.controller.dto.ExamCreateRequest;
+import school.hei.students.endpoint.rest.controller.dto.ExamUpdateRequest;
 import school.hei.students.model.Exam;
-import school.hei.students.model.ExamCreateRequest;
-import school.hei.students.model.ExamUpdateRequest;
 import school.hei.students.service.ExamService;
 import school.hei.students.service.GradeActorResolver;
 
