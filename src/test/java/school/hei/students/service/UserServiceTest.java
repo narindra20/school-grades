@@ -18,6 +18,7 @@ import school.hei.students.model.Role;
 import school.hei.students.model.User;
 import school.hei.students.repository.UserRepository;
 import school.hei.students.repository.model.JUser;
+import school.hei.students.service.exception.UserNotFoundException;
 
 class UserServiceTest {
   private UserRepository repository;
