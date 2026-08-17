@@ -11,8 +11,8 @@ import org.springframework.web.server.ResponseStatusException;
 import school.hei.students.endpoint.rest.controller.dto.LoginRequest;
 import school.hei.students.endpoint.rest.controller.dto.LoginResponse;
 import school.hei.students.security.JwtUtil;
-import school.hei.students.service.UserNotFoundException;
 import school.hei.students.service.UserService;
+import school.hei.students.service.exception.UserNotFoundException;
 
 @RestController
 @RequestMapping("/auth")

@@ -9,6 +9,7 @@ import school.hei.students.mapper.UserMapper;
 import school.hei.students.model.Role;
 import school.hei.students.model.User;
 import school.hei.students.repository.UserRepository;
+import school.hei.students.service.exception.UserNotFoundException;
 
 @Service
 @AllArgsConstructor

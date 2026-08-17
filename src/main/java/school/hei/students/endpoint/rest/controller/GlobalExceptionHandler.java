@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.server.ResponseStatusException;
 import school.hei.students.endpoint.rest.controller.dto.ErrorResponse;
-import school.hei.students.service.UserNotFoundException;
+import school.hei.students.service.exception.EntityNotFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -26,9 +26,9 @@ public class GlobalExceptionHandler {
                 extractPath(request)));
   }
 
-  @ExceptionHandler(UserNotFoundException.class)
-  public ResponseEntity<ErrorResponse> handleUserNotFoundException(
-      UserNotFoundException e, WebRequest request) {
+  @ExceptionHandler(EntityNotFoundException.class)
+  public ResponseEntity<ErrorResponse> handleEntityNotFoundException(
+      EntityNotFoundException e, WebRequest request) {
     return ResponseEntity.status(HttpStatus.NOT_FOUND)
         .body(
             new ErrorResponse(
