@@ -10,5 +10,6 @@ import school.hei.students.repository.model.JStudent;
 @Repository
 public interface StudentRepository extends JpaRepository<JStudent, UUID> {
   List<JStudent> findByCohortId(UUID cohortId);
+
   Optional<JStudent> findByUserId(UUID userId);
 }
