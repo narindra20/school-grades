@@ -121,6 +121,7 @@ class GradeServiceTest {
             .id(regularExamId)
             .assignmentId(assignmentId)
             .type(ExamType.REGULAR.name())
+            .coefficient(1.0)
             .build();
     var resitExam =
         JExam.builder()
@@ -153,6 +154,7 @@ class GradeServiceTest {
             .id(regularExamId)
             .assignmentId(assignmentId)
             .type(ExamType.REGULAR.name())
+            .coefficient(1.0)
             .build();
     var resitExam =
         JExam.builder()

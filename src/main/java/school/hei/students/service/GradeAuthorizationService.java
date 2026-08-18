@@ -1,5 +1,6 @@
 package school.hei.students.service;
 
+import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.Set;
 import java.util.UUID;
@@ -18,7 +19,6 @@ import school.hei.students.repository.StudentGroupHistoryRepository;
 public class GradeAuthorizationService {
   private static final String ACCESS_DENIED_MESSAGE =
       "The teacher did not teach this student on this course";
-
   private final StudentGroupHistoryRepository studentGroupHistoryRepository;
   private final CourseAssignmentTeachingRepository courseAssignmentTeachingRepository;
   private final ExamRepository examRepository;
@@ -68,7 +68,16 @@ public class GradeAuthorizationService {
     if (teacherGroupIds.isEmpty()) {
       return false;
     }
-    return !Collections.disjoint(teacherGroupIds, studentGroupIdsOf(studentId));
+    var examDate = exam.getExamDate().atZone(ZoneOffset.UTC).toLocalDate();
+    var studentGroupIdsAtExamDate =
+        studentGroupHistoryRepository.findByStudentId(studentId).stream()
+            .filter(
+                h ->
+                    !h.getStartDate().isAfter(examDate)
+                        && (h.getEndDate() == null || !h.getEndDate().isBefore(examDate)))
+            .map(h -> h.getGroupId())
+            .collect(Collectors.toSet());
+    return !Collections.disjoint(teacherGroupIds, studentGroupIdsAtExamDate);
   }
 
   private Set<UUID> studentGroupIdsOf(UUID studentId) {

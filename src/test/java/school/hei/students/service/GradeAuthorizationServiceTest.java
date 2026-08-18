@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -85,13 +87,25 @@ class GradeAuthorizationServiceTest {
     var assignmentId = UUID.randomUUID();
     var actor = GradeActor.builder().role(Role.TEACHER).teacherId(teacherId).build();
     when(examRepository.findById(examId))
-        .thenReturn(Optional.of(JExam.builder().id(examId).assignmentId(assignmentId).build()));
+        .thenReturn(
+            Optional.of(
+                JExam.builder()
+                    .id(examId)
+                    .assignmentId(assignmentId)
+                    .examDate(Instant.now())
+                    .build()));
     when(courseAssignmentTeachingRepository.findByAssignmentId(assignmentId))
         .thenReturn(
             List.of(
                 JCourseAssignmentTeaching.builder().teacherId(teacherId).groupId(groupId).build()));
     when(studentGroupHistoryRepository.findByStudentId(studentId))
-        .thenReturn(List.of(JStudentGroupHistory.builder().groupId(groupId).build()));
+        .thenReturn(
+            List.of(
+                JStudentGroupHistory.builder()
+                    .groupId(groupId)
+                    .startDate(LocalDate.now().minusMonths(1))
+                    .endDate(null)
+                    .build()));
     assertThatCode(() -> authorizationService.assertCanWriteGradeForExam(actor, examId, studentId))
         .doesNotThrowAnyException();
   }
