@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -28,7 +29,6 @@ public class GradeService {
   private static final double MIN_GRADE = 0.0;
   private static final double MAX_GRADE = 20.0;
   private static final double PASSING_THRESHOLD = 10.0;
-
   private final GradeRepository gradeRepository;
   private final GradeHistoryRepository gradeHistoryRepository;
   private final ExamRepository examRepository;
@@ -56,12 +56,12 @@ public class GradeService {
 
   @Transactional
   public Grade createGrade(UUID pathStudentId, GradeCreateRequest request, GradeActor actor) {
+    authorizationService.assertCanWriteGradeForExam(actor, request.examId(), request.studentId());
     if (!pathStudentId.equals(request.studentId())) {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST, "studentId in path and body must match");
     }
     assertValueInRange(request.value());
-    authorizationService.assertCanWriteGradeForExam(actor, request.examId(), request.studentId());
     assertResitAllowed(request.examId(), request.studentId());
     var toSave =
         Grade.builder()
@@ -113,23 +113,36 @@ public class GradeService {
     if (exam.getType() == null || !ExamType.RESIT.name().equals(exam.getType())) {
       return;
     }
-    var regularGradeExists =
+    var regularExams =
         examRepository.findByAssignmentId(exam.getAssignmentId()).stream()
             .filter(e -> ExamType.REGULAR.name().equals(e.getType()))
-            .flatMap(
-                regular ->
-                    gradeRepository.findByStudentId(studentId).stream()
-                        .filter(g -> g.getExamId().equals(regular.getId())))
-            .findFirst();
-    if (regularGradeExists.isEmpty()) {
+            .collect(Collectors.toList());
+    if (regularExams.isEmpty()) {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST,
-          "Cannot record a resit grade before a regular grade exists for this course");
+          "Cannot record a resit grade before regular grades exist for this course");
     }
-    if (regularGradeExists.get().getValue() >= PASSING_THRESHOLD) {
+    var studentGrades = gradeRepository.findByStudentId(studentId);
+    var weightedSum = 0.0;
+    var coefficientSum = 0.0;
+    for (var regular : regularExams) {
+      var gradeForExam =
+          studentGrades.stream().filter(g -> g.getExamId().equals(regular.getId())).findFirst();
+      if (gradeForExam.isEmpty()) {
+        throw new ResponseStatusException(
+            HttpStatus.BAD_REQUEST,
+            "Cannot record a resit grade before all regular grades exist for this course");
+      }
+      var coefficient = regular.getCoefficient().doubleValue();
+      weightedSum += gradeForExam.get().getValue() * coefficient;
+      coefficientSum += coefficient;
+    }
+    var combinedAverage = weightedSum / coefficientSum;
+    if (combinedAverage >= PASSING_THRESHOLD) {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST,
-          "Cannot record a resit grade: the regular grade already passed the threshold of "
+          "Cannot record a resit grade: the combined regular average already passed the threshold"
+              + " of "
               + PASSING_THRESHOLD);
     }
   }
