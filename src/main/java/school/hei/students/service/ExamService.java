@@ -52,11 +52,17 @@ public class ExamService {
   @Transactional
   public Exam updateExam(UUID examId, ExamUpdateRequest request, GradeActor actor) {
     assertAdmin(actor);
-    assertCoefficientValid(request.coefficient());
     var entity = findExamEntityOrThrow(examId);
-    entity.setLabel(request.label());
-    entity.setExamDate(request.examDate());
-    entity.setCoefficient(request.coefficient());
+    if (request.label() != null) {
+      entity.setLabel(request.label());
+    }
+    if (request.examDate() != null) {
+      entity.setExamDate(request.examDate());
+    }
+    if (request.coefficient() != null) {
+      assertCoefficientValid(request.coefficient());
+      entity.setCoefficient(request.coefficient());
+    }
     return examMapper.toModel(examRepository.save(entity));
   }
 
