@@ -84,6 +84,45 @@ class ExamServiceTest {
   }
 
   @Test
+  void update_exam_partial_update_only_changes_provided_fields() {
+    var examId = UUID.randomUUID();
+    var originalDate = Instant.parse("2025-01-01T00:00:00Z");
+    var existing =
+        JExam.builder()
+            .id(examId)
+            .assignmentId(assignmentId)
+            .label("OOP")
+            .examDate(originalDate)
+            .coefficient(0.6)
+            .type(ExamType.REGULAR.name())
+            .build();
+    when(examRepository.findById(examId)).thenReturn(Optional.of(existing));
+    when(examRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    var request = ExamUpdateRequest.builder().label("New label").build();
+    var result = examService.updateExam(examId, request, admin);
+    assertThat(result.label()).isEqualTo("New label");
+    assertThat(result.coefficient()).isEqualTo(0.6);
+    assertThat(result.examDate()).isEqualTo(originalDate);
+  }
+
+  @Test
+  void update_exam_rejects_non_positive_coefficient_when_provided() {
+    var examId = UUID.randomUUID();
+    var existing =
+        JExam.builder()
+            .id(examId)
+            .assignmentId(assignmentId)
+            .label("OOP")
+            .coefficient(0.6)
+            .type(ExamType.REGULAR.name())
+            .build();
+    when(examRepository.findById(examId)).thenReturn(Optional.of(existing));
+    var request = ExamUpdateRequest.builder().coefficient(0.0).build();
+    assertThatThrownBy(() -> examService.updateExam(examId, request, admin))
+        .isInstanceOf(ResponseStatusException.class);
+  }
+
+  @Test
   void delete_exam_rejected_when_grades_linked() {
     var examId = UUID.randomUUID();
     var existing =
