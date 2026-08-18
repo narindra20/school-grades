@@ -8,5 +8,7 @@ import school.hei.students.repository.model.JGrade;
 
 @Repository
 public interface GradeRepository extends JpaRepository<JGrade, UUID> {
+  List<JGrade> findByStudentId(UUID studentId);
+
   List<JGrade> findByExamId(UUID examId);
 }

@@ -9,7 +9,6 @@ import static org.springframework.http.HttpMethod.PUT;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -38,8 +37,6 @@ import school.hei.students.repository.model.JTeacher;
 import school.hei.students.service.UserService;
 
 class GradeControllerIT extends FacadeIT {
-  private static final AtomicLong STUDENT_NUMBER_SEQ = new AtomicLong();
-
   @Autowired private TestRestTemplate restTemplate;
   @Autowired private UserService userService;
   @Autowired private JdbcTemplate jdbcTemplate;
@@ -66,8 +63,8 @@ class GradeControllerIT extends FacadeIT {
     jdbcTemplate.update(
         "INSERT INTO course (id, code, title, credits, level, semester) VALUES (?, ?, ?, ?, ?, ?)",
         courseId,
-        "prog2-" + courseId,
-        "Programming 2",
+        "GRADE-IT-" + courseId,
+        "Grade IT course",
         6,
         "L1",
         "S2");
@@ -89,12 +86,16 @@ class GradeControllerIT extends FacadeIT {
   private UUID insertGroup(UUID cohortId) {
     var groupId = randomUUID();
     jdbcTemplate.update(
-        "INSERT INTO \"group\" (id, code, cohort_id) VALUES (?, ?, ?)", groupId, "K1", cohortId);
+        "INSERT INTO \"group\" (id, code, cohort_id) VALUES (?, ?, ?)",
+        groupId,
+        "GRADE-IT-" + groupId,
+        cohortId);
     return groupId;
   }
 
   private JStudent createStudent(UUID cohortId) {
-    var email = "student-" + randomUUID() + "@hei.school";
+    var uniqueSuffix = randomUUID();
+    var email = "grade-it-student-" + uniqueSuffix + "@hei.school";
     var user = userService.create(randomUUID(), email, "test-password-only", Role.STUDENT);
     return studentRepository.save(
         JStudent.builder()
@@ -102,14 +103,14 @@ class GradeControllerIT extends FacadeIT {
             .cohortId(cohortId)
             .lastName("Rakoto")
             .firstName("Fitia")
-            .studentNumber("25" + STUDENT_NUMBER_SEQ.incrementAndGet())
+            .studentNumber(uniqueSuffix.toString())
             .workStudy(false)
             .active(true)
             .build());
   }
 
   private JTeacher createTeacher() {
-    var email = "teacher-" + randomUUID() + "@hei.school";
+    var email = "grade-it-teacher-" + randomUUID() + "@hei.school";
     var user = userService.create(randomUUID(), email, "test-password-only", Role.TEACHER);
     return teacherRepository.save(
         JTeacher.builder()
@@ -132,9 +133,14 @@ class GradeControllerIT extends FacadeIT {
   }
 
   private String adminToken() {
-    var email = "admin-" + randomUUID() + "@hei.school";
+    var email = "grade-it-admin-" + randomUUID() + "@hei.school";
     userService.create(randomUUID(), email, "test-password-only", Role.ADMIN);
     return login(email, "test-password-only");
+  }
+
+  private String userEmailOf(UUID userId) {
+    return jdbcTemplate.queryForObject(
+        "SELECT email FROM \"user\" WHERE id = ?", String.class, userId);
   }
 
   @Test
@@ -369,10 +375,5 @@ class GradeControllerIT extends FacadeIT {
             new HttpEntity<>(new HttpHeaders()),
             String.class);
     assertThat(response.getStatusCode()).isIn(HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN);
-  }
-
-  private String userEmailOf(UUID userId) {
-    return jdbcTemplate.queryForObject(
-        "SELECT email FROM \"user\" WHERE id = ?", String.class, userId);
   }
 }
