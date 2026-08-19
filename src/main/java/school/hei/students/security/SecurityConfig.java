@@ -43,7 +43,7 @@ public class SecurityConfig {
             auth ->
                 auth.requestMatchers("/auth/login")
                     .permitAll()
-                    .requestMatchers("/admin/**")
+                    .requestMatchers("/admin/**", "/web/**")
                     .hasRole("ADMIN")
                     .anyRequest()
                     .authenticated())
