@@ -1,0 +1,1838 @@
+openapi: 3.0.3
+info:
+  title: HEI - Graduate Management API
+  description: >
+    API for managing grades, groups, tracks and graduates at HEI.
+    Roles: STUDENT (read own grades only), TEACHER (read/write grades of
+    students they actually teach), ADMIN (full access).
+  version: "1.0.0"
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+tags:
+  - name: Auth
+  - name: Grades
+  - name: Transcripts
+  - name: Graduates
+  - name: Cohorts
+  - name: Web
+  - name: Admin - Users
+  - name: Admin - Students
+  - name: Admin - Teachers
+  - name: Admin - Cohorts
+  - name: Admin - Tracks
+  - name: Admin - Groups
+  - name: Admin - Courses
+  - name: Admin - CourseAssignments
+  - name: Admin - Exams
+
+security:
+  - bearerAuth: []
+
+paths:
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: {type: string, format: email}
+                password: {type: string, format: password}
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: {type: string}
+                  role: {$ref: '#/components/schemas/Role'}
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /students/{studentId}/grades:
+    parameters:
+      - $ref: '#/components/parameters/StudentId'
+    get:
+      tags: [Grades]
+      summary: List a student's grades
+      description: >
+        STUDENT: own grades only (studentId = principal).
+        TEACHER: only if they actually taught this student on at least one course (enforced server-side).
+        ADMIN: full access.
+      responses:
+        '200':
+          description: List of grades
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Grade'}
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Grades]
+      summary: Create a grade (initial entry)
+      description: TEACHER (ownership of course/group/exam) or ADMIN.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/GradeCreateRequest'}
+      responses:
+        '201':
+          description: Grade created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Grade'}
+        '403':
+          description: "The teacher did not teach this student on this course"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /grades/{gradeId}:
+    parameters:
+      - $ref: '#/components/parameters/GradeId'
+    get:
+      tags: [Grades]
+      summary: Grade detail
+      responses:
+        '200':
+          description: Grade
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Grade'}
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags: [Grades]
+      summary: Update a grade (dispute, correction)
+      description: >
+        TEACHER (ownership verified via COURSE_ASSIGNMENT_TEACHING + STUDENT_GROUP_HISTORY)
+        or ADMIN. Automatically creates a GRADE_HISTORY entry.
+        Reason is mandatory.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/GradeUpdateRequest'}
+      responses:
+        '200':
+          description: Grade updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Grade'}
+        '403':
+          description: "The teacher did not teach this student on this course"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /grades/{gradeId}/history:
+    parameters:
+      - $ref: '#/components/parameters/GradeId'
+    get:
+      tags: [Grades]
+      summary: Grade modification history
+      description: Read-only, generated automatically. No write endpoint exists for this resource.
+      responses:
+        '200':
+          description: History
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/GradeHistory'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /students/{studentId}/transcript/send:
+    parameters:
+      - $ref: '#/components/parameters/StudentId'
+    post:
+      tags: [Transcripts]
+      summary: Trigger asynchronous PDF transcript generation and email delivery
+      description: STUDENT (self), TEACHER (ownership), or ADMIN. Asynchronous processing (@Async), immediate 202 response.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [academicYear]
+              properties:
+                academicYear: {type: string, example: "2024-2025"}
+      responses:
+        '202':
+          description: Accepted, delivery in progress in background
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TranscriptDelivery'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /students/{studentId}/transcript-deliveries:
+    parameters:
+      - $ref: '#/components/parameters/StudentId'
+    get:
+      tags: [Transcripts]
+      summary: Transcript delivery history for a student
+      description: Read-only, audit trail. No manual creation possible.
+      responses:
+        '200':
+          description: Delivery history
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/TranscriptDelivery'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/transcript-deliveries:
+    get:
+      tags: [Admin - Students]
+      summary: Global transcript delivery history (audit)
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/TranscriptDelivery'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /cohorts/{cohortId}/graduates/export:
+    parameters:
+      - $ref: '#/components/parameters/CohortId'
+    get:
+      tags: [Graduates]
+      summary: Download the XLSX file of graduates for a cohort
+      description: >
+        Columns Rank, StudentNumber, LastName, FirstName, OverallAverage — sorted by rank.
+        Direct download, no email. ADMIN only.
+      responses:
+        '200':
+          description: XLSX file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /cohorts:
+    get:
+      tags: [Cohorts]
+      summary: List all cohorts
+      responses:
+        '200':
+          description: List of cohorts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Cohort'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /web/cohorts:
+    get:
+      tags: [Web]
+      summary: HTML page listing cohorts with a graduates download button
+      responses:
+        '200':
+          description: HTML page
+          content:
+            text/html:
+              schema:
+                type: string
+
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/users:
+    get:
+      tags: [Admin - Users]
+      summary: List users
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/User'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Admin - Users]
+      summary: Create a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UserCreateRequest'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/User'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/users/{userId}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      tags: [Admin - Users]
+      summary: User detail
+      responses:
+        '200':
+          description: User
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/User'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags: [Admin - Users]
+      summary: Update a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UserUpdateRequest'}
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/User'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Admin - Users]
+      summary: Deactivate a user (soft delete)
+      description: >
+        Implemented as a soft delete (active=false field), never a real SQL deletion,
+        to preserve the integrity of related historical GRADE/COURSE_ASSIGNMENT_TEACHING records.
+      responses:
+        '204': {description: Deactivated}
+        '409':
+          description: "Blocked: related historical data exists"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/students:
+    get:
+      tags: [Admin - Students]
+      summary: List students
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Student'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Admin - Students]
+      summary: Create a student
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/StudentCreateRequest'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Student'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/students/{studentId}:
+    parameters:
+      - $ref: '#/components/parameters/StudentId'
+    get:
+      tags: [Admin - Students]
+      summary: Student detail
+      responses:
+        '200':
+          description: Student
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Student'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags: [Admin - Students]
+      summary: Update a student
+      description: "studentNumber is NOT updatable (fixed identifier for life)."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/StudentUpdateRequest'}
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Student'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Admin - Students]
+      summary: Deactivate a student (soft delete)
+      responses:
+        '204': {description: Deactivated}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/students/{studentId}/change-group:
+    parameters:
+      - $ref: '#/components/parameters/StudentId'
+    post:
+      tags: [Admin - Students]
+      summary: Change a student's group (business action, not a raw CRUD)
+      description: >
+        Automatically closes the active STUDENT_GROUP_HISTORY entry (endDate = changeDate)
+        and creates a new one. Deliberately no free PUT/DELETE on
+        STUDENT_GROUP_HISTORY, to preserve the invariant "at most one active group at a time".
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newGroupId, changeDate]
+              properties:
+                newGroupId: {type: string, format: uuid}
+                changeDate: {type: string, format: date}
+      responses:
+        '200':
+          description: Change applied
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StudentGroupHistory'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/students/{studentId}/group-history:
+    parameters:
+      - $ref: '#/components/parameters/StudentId'
+    get:
+      tags: [Admin - Students]
+      summary: A student's group history
+      description: ADMIN, or TEACHER if concerned by at least one of the groups.
+      responses:
+        '200':
+          description: History
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/StudentGroupHistory'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/teachers:
+    get:
+      tags: [Admin - Teachers]
+      summary: List teachers
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Teacher'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Admin - Teachers]
+      summary: Create a teacher
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TeacherCreateRequest'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Teacher'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/teachers/{teacherId}:
+    parameters:
+      - name: teacherId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      tags: [Admin - Teachers]
+      summary: Teacher detail
+      responses:
+        '200':
+          description: Teacher
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Teacher'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags: [Admin - Teachers]
+      summary: Update a teacher
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TeacherCreateRequest'}
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Teacher'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Admin - Teachers]
+      summary: Deactivate a teacher (soft delete)
+      description: Soft delete if COURSE_ASSIGNMENT_TEACHING records exist, to preserve the record of who taught what.
+      responses:
+        '204': {description: Deactivated}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/cohorts:
+    post:
+      tags: [Admin - Cohorts]
+      summary: Create a cohort
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CohortCreateRequest'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Cohort'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/cohorts/{cohortId}:
+    parameters:
+      - $ref: '#/components/parameters/CohortId'
+    get:
+      tags: [Admin - Cohorts]
+      summary: Cohort detail
+      responses:
+        '200':
+          description: Cohort
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Cohort'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags: [Admin - Cohorts]
+      summary: Update a cohort
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CohortCreateRequest'}
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Cohort'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Admin - Cohorts]
+      summary: Delete a cohort
+      description: Rejected (409) if STUDENT or GROUP records are linked.
+      responses:
+        '204': {description: Deleted}
+        '409':
+          description: "Students or groups are linked to this cohort"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/tracks:
+    get:
+      tags: [Admin - Tracks]
+      summary: List tracks
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Track'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Admin - Tracks]
+      summary: Create a track
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TrackCreateRequest'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Track'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/tracks/{trackId}:
+    parameters:
+      - name: trackId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    put:
+      tags: [Admin - Tracks]
+      summary: Update a track
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TrackCreateRequest'}
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Track'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Admin - Tracks]
+      summary: Delete a track
+      description: Rejected (409) if GROUP or TRACK_COURSE records are linked.
+      responses:
+        '204': {description: Deleted}
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/tracks/{trackId}/courses:
+    parameters:
+      - name: trackId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      tags: [Admin - Tracks]
+      summary: List courses associated with this track (official catalog)
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Course'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/tracks/{trackId}/courses/{courseId}:
+    parameters:
+      - name: trackId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      - name: courseId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    post:
+      tags: [Admin - Tracks]
+      summary: Link a course to a track
+      responses:
+        '201': {description: Linked}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Admin - Tracks]
+      summary: Unlink a course from a track
+      responses:
+        '204': {description: Unlinked}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/groups:
+    get:
+      tags: [Admin - Groups]
+      summary: List groups
+      parameters:
+        - name: cohortId
+          in: query
+          schema: {type: string, format: uuid}
+        - name: trackId
+          in: query
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Group'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Admin - Groups]
+      summary: Create a group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/GroupCreateRequest'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Group'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/groups/{groupId}:
+    parameters:
+      - name: groupId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      tags: [Admin - Groups]
+      summary: Group detail
+      responses:
+        '200':
+          description: Group
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Group'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags: [Admin - Groups]
+      summary: Update a group
+      description: >
+        Only the code field is updatable. trackId and cohortId are fixed
+        at creation (business rule: a group is never reassigned to another
+        track or another cohort).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code: {type: string}
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Group'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Admin - Groups]
+      summary: Delete a group
+      description: Rejected (409) if STUDENT_GROUP_HISTORY or COURSE_ASSIGNMENT_TEACHING records are linked.
+      responses:
+        '204': {description: Deleted}
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/courses:
+    get:
+      tags: [Admin - Courses]
+      summary: List courses
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Course'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Admin - Courses]
+      summary: Create a course
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CourseCreateRequest'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Course'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/courses/{courseId}:
+    parameters:
+      - name: courseId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      tags: [Admin - Courses]
+      summary: Course detail
+      responses:
+        '200':
+          description: Course
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Course'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags: [Admin - Courses]
+      summary: Update a course
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CourseCreateRequest'}
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Course'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Admin - Courses]
+      summary: Delete a course
+      description: Rejected (409) if COURSE_ASSIGNMENT records are linked.
+      responses:
+        '204': {description: Deleted}
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/course-assignments:
+    get:
+      tags: [Admin - CourseAssignments]
+      summary: List yearly course instances
+      parameters:
+        - name: academicYear
+          in: query
+          schema: {type: string}
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/CourseAssignment'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Admin - CourseAssignments]
+      summary: Create a yearly course instance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CourseAssignmentCreateRequest'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CourseAssignment'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/course-assignments/{assignmentId}:
+    parameters:
+      - name: assignmentId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      tags: [Admin - CourseAssignments]
+      summary: Detail
+      responses:
+        '200':
+          description: Assignment
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CourseAssignment'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags: [Admin - CourseAssignments]
+      summary: Update (academicYear only — courseId not updatable)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                academicYear: {type: string}
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CourseAssignment'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Admin - CourseAssignments]
+      summary: Delete
+      description: Rejected (409) if EXAM or COURSE_ASSIGNMENT_TEACHING records are linked.
+      responses:
+        '204': {description: Deleted}
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/course-assignments/{assignmentId}/teaching:
+    parameters:
+      - name: assignmentId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      tags: [Admin - CourseAssignments]
+      summary: List teacher/group assignments for this yearly course
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/CourseAssignmentTeaching'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Admin - CourseAssignments]
+      summary: Assign a teacher to a group for this yearly course
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [teacherId, groupId]
+              properties:
+                teacherId: {type: string, format: uuid}
+                groupId: {type: string, format: uuid}
+      responses:
+        '201':
+          description: Assigned
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CourseAssignmentTeaching'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/course-assignment-teaching/{teachingId}:
+    parameters:
+      - name: teachingId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    delete:
+      tags: [Admin - CourseAssignments]
+      summary: Remove a teacher/group assignment
+      description: Rejected (409) if GRADE records already exist for this teacher/group pair.
+      responses:
+        '204': {description: Removed}
+        '409':
+          description: "Grades already exist for this assignment"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/course-assignments/{assignmentId}/exams:
+    parameters:
+      - name: assignmentId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      tags: [Admin - Exams]
+      summary: List exams for a yearly course
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Exam'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Admin - Exams]
+      summary: Create an exam (regular or resit)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ExamCreateRequest'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Exam'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /admin/exams/{examId}:
+    parameters:
+      - name: examId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      tags: [Admin - Exams]
+      summary: Exam detail
+      responses:
+        '200':
+          description: Exam
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Exam'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags: [Admin - Exams]
+      summary: Update an exam
+      description: "label, examDate, coefficient only — type (REGULAR/RESIT) is not updatable after creation."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: {type: string}
+                examDate: {type: string, format: date-time}
+                coefficient: {type: number, format: double}
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Exam'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Admin - Exams]
+      summary: Delete an exam
+      description: Rejected (409) if GRADE records are linked.
+      responses:
+        '204': {description: Deleted}
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    StudentId:
+      name: studentId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    GradeId:
+      name: gradeId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    CohortId:
+      name: cohortId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+
+  schemas:
+    Role:
+      type: string
+      enum: [STUDENT, TEACHER, ADMIN]
+
+    ExamType:
+      type: string
+      enum: [REGULAR, RESIT]
+
+    DeliveryStatus:
+      type: string
+      enum: [IN_PROGRESS, SENT, FAILED]
+
+    User:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        email: {type: string, format: email}
+        role: {$ref: '#/components/schemas/Role'}
+
+    UserCreateRequest:
+      type: object
+      required: [email, password, role]
+      properties:
+        email: {type: string, format: email}
+        password: {type: string, format: password}
+        role: {$ref: '#/components/schemas/Role'}
+
+    UserUpdateRequest:
+      type: object
+      properties:
+        email: {type: string, format: email}
+        password: {type: string, format: password}
+        role: {$ref: '#/components/schemas/Role'}
+
+    Student:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        userId: {type: string, format: uuid}
+        cohortId: {type: string, format: uuid}
+        lastName: {type: string}
+        firstName: {type: string}
+        studentNumber: {type: string, example: "24001"}
+        workStudy: {type: boolean}
+
+    StudentCreateRequest:
+      type: object
+      required: [userId, cohortId, lastName, firstName, studentNumber]
+      properties:
+        userId: {type: string, format: uuid}
+        cohortId: {type: string, format: uuid}
+        lastName: {type: string}
+        firstName: {type: string}
+        studentNumber: {type: string}
+        workStudy: {type: boolean, default: false}
+
+    StudentUpdateRequest:
+      type: object
+      description: "studentNumber deliberately absent — not updatable after creation."
+      properties:
+        lastName: {type: string}
+        firstName: {type: string}
+        workStudy: {type: boolean}
+        cohortId: {type: string, format: uuid}
+
+    Teacher:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        userId: {type: string, format: uuid}
+        lastName: {type: string}
+        firstName: {type: string}
+
+    TeacherCreateRequest:
+      type: object
+      required: [userId, lastName, firstName]
+      properties:
+        userId: {type: string, format: uuid}
+        lastName: {type: string}
+        firstName: {type: string}
+
+    Cohort:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        entryYear: {type: integer, example: 2024}
+
+    CohortCreateRequest:
+      type: object
+      required: [entryYear]
+      properties:
+        entryYear: {type: integer}
+
+    Track:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, example: "EL"}
+
+    TrackCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+
+    Group:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        code: {type: string, example: "K1"}
+        trackId: {type: string, format: uuid, nullable: true}
+        cohortId: {type: string, format: uuid}
+
+    GroupCreateRequest:
+      type: object
+      required: [code, cohortId]
+      properties:
+        code: {type: string}
+        trackId: {type: string, format: uuid, nullable: true}
+        cohortId: {type: string, format: uuid}
+
+    StudentGroupHistory:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        studentId: {type: string, format: uuid}
+        groupId: {type: string, format: uuid}
+        startDate: {type: string, format: date}
+        endDate: {type: string, format: date, nullable: true}
+
+    Course:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        code: {type: string, example: "prog2"}
+        title: {type: string}
+        credits: {type: integer}
+        level: {type: string, enum: [L1, L2, L3]}
+        semester: {type: string, example: "S2"}
+
+    CourseCreateRequest:
+      type: object
+      required: [code, title, credits, level, semester]
+      properties:
+        code: {type: string}
+        title: {type: string}
+        credits: {type: integer}
+        level: {type: string, enum: [L1, L2, L3]}
+        semester: {type: string}
+
+    CourseAssignment:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        courseId: {type: string, format: uuid}
+        academicYear: {type: string, example: "2024-2025"}
+
+    CourseAssignmentCreateRequest:
+      type: object
+      required: [courseId, academicYear]
+      properties:
+        courseId: {type: string, format: uuid}
+        academicYear: {type: string}
+
+    CourseAssignmentTeaching:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        assignmentId: {type: string, format: uuid}
+        teacherId: {type: string, format: uuid}
+        groupId: {type: string, format: uuid}
+
+    Exam:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        assignmentId: {type: string, format: uuid}
+        label: {type: string, example: "OOP"}
+        examDate: {type: string, format: date-time}
+        coefficient: {type: number, format: double, example: 0.6}
+        type: {$ref: '#/components/schemas/ExamType'}
+
+    ExamCreateRequest:
+      type: object
+      required: [label, examDate, coefficient]
+      properties:
+        label: {type: string}
+        examDate: {type: string, format: date-time}
+        coefficient: {type: number, format: double}
+        type:
+          allOf: [$ref: '#/components/schemas/ExamType']
+          default: REGULAR
+
+    Grade:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        studentId: {type: string, format: uuid}
+        examId: {type: string, format: uuid}
+        value: {type: number, format: double, minimum: 0, maximum: 20}
+        gradedDate: {type: string, format: date}
+
+    GradeCreateRequest:
+      type: object
+      required: [studentId, examId, value]
+      properties:
+        studentId: {type: string, format: uuid}
+        examId: {type: string, format: uuid}
+        value: {type: number, format: double, minimum: 0, maximum: 20}
+
+    GradeUpdateRequest:
+      type: object
+      required: [value, reason]
+      properties:
+        value: {type: number, format: double, minimum: 0, maximum: 20}
+        reason:
+          type: string
+          description: Mandatory — covers student disputes among other cases.
+          example: "Student dispute — grading error on question 3"
+
+    GradeHistory:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        gradeId: {type: string, format: uuid}
+        oldValue: {type: number, format: double}
+        newValue: {type: number, format: double}
+        reason: {type: string}
+        modifiedAt: {type: string, format: date-time}
+
+    TranscriptDelivery:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        studentId: {type: string, format: uuid}
+        academicYear: {type: string}
+        sentAt: {type: string, format: date-time}
+        s3Url: {type: string, format: uri}
+        status: {$ref: '#/components/schemas/DeliveryStatus'}
+    Error:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+          example: 404
+        error:
+          type: string
+          example: Not Found
+        message:
+          type: string
+          example: Resource not found
+        path:
+          type: string
+          example: /students/123/grades
+  responses:
+    BadRequest:
+      description: Invalid request (validation error)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Authenticated but not allowed to perform this action
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Request conflicts with current state / business rule / referential integrity
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
