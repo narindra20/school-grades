@@ -18,6 +18,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 import school.hei.students.endpoint.event.EventProducer;
 import school.hei.students.mapper.TranscriptDeliveryMapper;
@@ -57,11 +59,20 @@ class TranscriptDeliveryServiceTest {
     doNothing().when(authorizationService).assertCanReadStudentGrades(admin, studentId);
     when(studentRepository.existsById(studentId)).thenReturn(true);
     when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-    var delivery = service.requestTranscript(studentId, "2024-2025", admin);
-    assertThat(delivery.studentId()).isEqualTo(studentId);
-    assertThat(delivery.academicYear()).isEqualTo("2024-2025");
-    assertThat(delivery.status()).isEqualTo(DeliveryStatus.IN_PROGRESS);
-    assertThat(delivery.sentAt()).isNull();
+    TransactionSynchronizationManager.initSynchronization();
+    try {
+      var delivery = service.requestTranscript(studentId, "2024-2025", admin);
+      assertThat(delivery.studentId()).isEqualTo(studentId);
+      assertThat(delivery.academicYear()).isEqualTo("2024-2025");
+      assertThat(delivery.status()).isEqualTo(DeliveryStatus.IN_PROGRESS);
+      assertThat(delivery.sentAt()).isNull();
+      for (TransactionSynchronization synchronization :
+          TransactionSynchronizationManager.getSynchronizations()) {
+        synchronization.afterCommit();
+      }
+    } finally {
+      TransactionSynchronizationManager.clearSynchronization();
+    }
     verify(eventProducer).accept(anyList());
   }
 

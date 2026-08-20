@@ -8,6 +8,8 @@ import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 import school.hei.students.endpoint.event.EventProducer;
 import school.hei.students.endpoint.event.model.TranscriptRequested;
@@ -47,15 +49,19 @@ public class TranscriptDeliveryService {
             .status(DeliveryStatus.IN_PROGRESS)
             .build();
     var saved = mapper.toModel(repository.save(mapper.toEntity(delivery)));
-
-    eventProducer.accept(
-        List.of(
-            TranscriptRequested.builder()
-                .transcriptDeliveryId(saved.id())
-                .studentId(studentId)
-                .academicYear(academicYear)
-                .build()));
-
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            eventProducer.accept(
+                List.of(
+                    TranscriptRequested.builder()
+                        .transcriptDeliveryId(saved.id())
+                        .studentId(studentId)
+                        .academicYear(academicYear)
+                        .build()));
+          }
+        });
     return saved;
   }
 
