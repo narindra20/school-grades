@@ -35,9 +35,4 @@ public class TranscriptRequested extends PojaEvent {
   public Duration maxConsumerBackoffBetweenRetries() {
     return Duration.ofSeconds(30);
   }
-
-  @Override
-  public String getEventSource() {
-    return "school.hei.students.transcript";
-  }
 }
