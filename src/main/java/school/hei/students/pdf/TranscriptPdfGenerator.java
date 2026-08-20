@@ -2,7 +2,6 @@ package school.hei.students.pdf;
 
 import static java.io.File.createTempFile;
 
-import com.lowagie.text.Chunk;
 import com.lowagie.text.Document;
 import com.lowagie.text.DocumentException;
 import com.lowagie.text.Element;
@@ -10,6 +9,7 @@ import com.lowagie.text.Font;
 import com.lowagie.text.FontFactory;
 import com.lowagie.text.PageSize;
 import com.lowagie.text.Paragraph;
+import com.lowagie.text.Phrase;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
@@ -24,7 +24,6 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class TranscriptPdfGenerator {
-
   private static final Font TITLE_FONT = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18);
   private static final Font SUBTITLE_FONT = FontFactory.getFont(FontFactory.HELVETICA, 12);
   private static final Font HEADER_FONT =
@@ -47,7 +46,6 @@ public class TranscriptPdfGenerator {
     var document = new Document(PageSize.A4, 50, 50, 50, 50);
     PdfWriter.getInstance(document, out);
     document.open();
-
     document.add(title());
     document.add(studentHeader(data));
     document.add(spacer());
@@ -55,7 +53,6 @@ public class TranscriptPdfGenerator {
     document.add(spacer());
     document.add(overallAverage(data));
     document.add(footer());
-
     document.close();
   }
 
@@ -88,12 +85,10 @@ public class TranscriptPdfGenerator {
   private PdfPTable coursesTable(TranscriptData data) {
     var table = new PdfPTable(new float[] {2f, 5f, 1.5f, 2f});
     table.setWidthPercentage(100);
-
     addHeaderCell(table, "Code");
     addHeaderCell(table, "Matière");
     addHeaderCell(table, "Crédits");
     addHeaderCell(table, "Moyenne");
-
     for (var line : data.lines()) {
       addCell(table, line.courseCode(), Element.ALIGN_LEFT);
       addCell(table, line.courseTitle(), Element.ALIGN_LEFT);
@@ -107,7 +102,7 @@ public class TranscriptPdfGenerator {
   }
 
   private void addHeaderCell(PdfPTable table, String text) {
-    var cell = new PdfPCell(new Chunk(text, HEADER_FONT).getImage());
+    var cell = new PdfPCell(new Phrase(text, HEADER_FONT));
     cell.setBackgroundColor(HEADER_BG);
     cell.setPadding(6f);
     cell.setHorizontalAlignment(Element.ALIGN_CENTER);
@@ -115,7 +110,7 @@ public class TranscriptPdfGenerator {
   }
 
   private void addCell(PdfPTable table, String text, int alignment) {
-    var cell = new PdfPCell(new Chunk(text == null ? "" : text, CELL_FONT).getImage());
+    var cell = new PdfPCell(new Phrase(text == null ? "" : text, CELL_FONT));
     cell.setPadding(5f);
     cell.setHorizontalAlignment(alignment);
     table.addCell(cell);
