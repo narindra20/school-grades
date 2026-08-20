@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Promotions</title>
+  <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<h1>Promotions</h1>
+<table>
+  <thead>
+  <tr>
+    <th>Promotion</th>
+    <th>Group</th>
+    <th>Diplômés</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr th:each="cohort : ${cohorts}">
+    <td th:text="${cohort.entryYear}"></td>
+    <td th:text="${groupsByCohortId.get(cohort.id)}"></td>
+    <td>
+      <a th:if="${token} != null"
+         th:href="@{'/cohorts/' + ${cohort.id} + '/graduates/export'(token=${token})}">Télécharger la liste des diplômés</a>
+      <a th:if="${token} == null"
+         th:href="@{'/cohorts/' + ${cohort.id} + '/graduates/export'}">Télécharger la liste des diplômés</a>
+    </td>
+  </tr>
+  </tbody>
+</table>
+</body>
+</html>
