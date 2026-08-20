@@ -20,17 +20,22 @@ public class JwtAuthFilter extends OncePerRequestFilter {
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
       throws ServletException, IOException {
-    var header = request.getHeader("Authorization");
-    if (header != null && header.startsWith("Bearer ")) {
-      var token = header.substring(7);
-      if (jwtUtil.isValid(token)) {
-        var email = jwtUtil.extractEmail(token);
-        var role = jwtUtil.extractRole(token);
-        var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
-        var authentication = new UsernamePasswordAuthenticationToken(email, null, authorities);
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-      }
+    var token = extractToken(request);
+    if (token != null && jwtUtil.isValid(token)) {
+      var email = jwtUtil.extractEmail(token);
+      var role = jwtUtil.extractRole(token);
+      var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
+      var authentication = new UsernamePasswordAuthenticationToken(email, null, authorities);
+      SecurityContextHolder.getContext().setAuthentication(authentication);
     }
     filterChain.doFilter(request, response);
+  }
+
+  private String extractToken(HttpServletRequest request) {
+    var header = request.getHeader("Authorization");
+    if (header != null && header.startsWith("Bearer ")) {
+      return header.substring(7);
+    }
+    return request.getParameter("token");
   }
 }

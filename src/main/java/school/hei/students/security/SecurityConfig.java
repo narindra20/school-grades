@@ -43,7 +43,9 @@ public class SecurityConfig {
             auth ->
                 auth.requestMatchers("/auth/login")
                     .permitAll()
-                    .requestMatchers("/admin/**", "/web/**")
+                    .requestMatchers("/css/**")
+                    .permitAll()
+                    .requestMatchers("/admin/**")
                     .hasRole("ADMIN")
                     .anyRequest()
                     .authenticated())
