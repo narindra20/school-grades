@@ -46,6 +46,12 @@ class WebControllerIT extends FacadeIT {
     return login(email, "test-password-only");
   }
 
+  private String tokenWithRole(Role role) {
+    var email = "web-it-" + role.name().toLowerCase() + "-" + randomUUID() + "@hei.school";
+    userService.create(randomUUID(), email, "test-password-only", role);
+    return login(email, "test-password-only");
+  }
+
   @Test
   void authenticated_user_sees_cohort_list_and_download_link() {
     var cohort = cohortRepository.save(JCohort.builder().entryYear(2025).build());
@@ -112,5 +118,36 @@ class WebControllerIT extends FacadeIT {
             new HttpEntity<>(new HttpHeaders()),
             String.class);
     assertThat(response.getStatusCode()).isIn(HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  void student_cannot_see_cohort_list() {
+    var token = tokenWithRole(Role.STUDENT);
+
+    var response =
+        restTemplate.exchange("/web/cohorts", GET, new HttpEntity<>(headers(token)), String.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  void teacher_cannot_see_cohort_list() {
+    var token = tokenWithRole(Role.TEACHER);
+
+    var response =
+        restTemplate.exchange("/web/cohorts", GET, new HttpEntity<>(headers(token)), String.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  void non_admin_token_query_param_is_rejected() {
+    var token = tokenWithRole(Role.STUDENT);
+
+    var response =
+        restTemplate.exchange(
+            "/web/cohorts?token=" + token, GET, new HttpEntity<>(new HttpHeaders()), String.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 }
