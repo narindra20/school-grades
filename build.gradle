@@ -153,7 +153,9 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter:2.0.2'
     testImplementation 'org.junit-pioneer:junit-pioneer:2.2.0'
 
-implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+    implementation 'io.sentry:sentry-logback:7.6.0'
+    implementation 'io.sentry:sentry-spring-boot-starter-jakarta:7.4.0'
+    implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
 implementation 'org.springframework.boot:spring-boot-starter-validation'
  implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
 runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
@@ -164,5 +166,6 @@ implementation 'org.springframework.boot:spring-boot-starter-security'
 testImplementation 'org.apache.httpcomponents.client5:httpclient5'
 testImplementation 'org.springframework.security:spring-security-test'
 
+    
 
 }
